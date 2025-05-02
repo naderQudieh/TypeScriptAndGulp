@@ -1,0 +1,30 @@
+﻿body {
+	min-height: 750px !important;
+}
+.main-container {
+	display: block;
+	min-height: 750px !important;
+	background-color:#ccc!important;
+	min-height:500px; 
+}
+#mainhader {
+	background-color: #0758a9 !important;
+}
+
+ 
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+tbody th, td {
+	padding: 8px;
+	text-align: left;
+	border-bottom: 1px solid #ddd;
+}
+
+tbody tr:hover {
+	background-color:#eeeded!important;
+	cursor:pointer;
+}
+ 
