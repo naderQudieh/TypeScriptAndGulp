@@ -15,7 +15,7 @@ const size = require('gulp-size');
 const path = require('path');
 var browserSync = require('browser-sync').create();
 const babelify = require('babelify');
-
+const { minify } = require('terser');
 var PATH_ENTRY = { src: "./src/scripts/main.ts" };
 var PATH_CSS = { src: "./src/css/*.*", dist: "./dist/css/" };
 var PATH_JS = { src: "./src/**/*.ts", dist: "./dist/js/" };
@@ -55,7 +55,7 @@ gulp.task("copyHtml", function (done) {
         .on("change", function (file) {
             console.log(file);
         })
-        .pipe(template({ scripts: ['js/page_products.min.js','js/shared.min.js'] }))
+        .pipe(template({ scripts: ['js/shared.min.js','js/page_products.min.js'] }))
         .pipe(fileinclude({
             prefix: '@@',
             basepath: "@root", // Paths relative to each HTML file
@@ -80,7 +80,7 @@ gulp.task("copyIndex", function (done) {
         .on("change", function (file) {
             console.log(file);
         }).pipe(newer(distHtml))
-        .pipe(template({ scripts: ['js/main.min.js', 'js/shared.min.js'] }))
+        .pipe(template({ scripts: ['js/shared.min.js', 'js/main.min.js'] }))
         .pipe(fileinclude({
             prefix: '@@',
             basepath: "@root", // Paths relative to each HTML file
@@ -237,4 +237,4 @@ async function browserSyncReload(cb) {
 
 gulp.task('prod', compile_prod);
 gulp.task('dev', compile_dev);
-gulp.task('default', gulp.parallel(compile_prod,browserSyncServe, watchTask));
+gulp.task('default', gulp.parallel(compile_prod, browserSyncServe, "copyHtml", "copyIndex", watchTask));
