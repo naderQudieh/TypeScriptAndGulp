@@ -1,0 +1,463 @@
+﻿/// <binding Clean='bundleScripts' />
+ 
+
+var gulp = require("gulp");
+const template = require('gulp-template');
+var gulpif = require('gulp-if');
+var browserify = require("browserify");
+var source = require("vinyl-source-stream");
+var buffer = require("vinyl-buffer");
+var tap = require('gulp-tap');
+var tsify = require("tsify");
+const terser = require('gulp-terser');
+ 
+
+//import   imagemin   from 'gulp-imagemin';
+//const imagemin = require("gulp-imagemin");
+var sourcemaps = require("gulp-sourcemaps");
+var babelify = require("babelify");
+const uglify = require("gulp-uglify");
+const fileinclude = require('gulp-file-include');
+var plumber = require('gulp-plumber');
+var gutil = require('gulp-util');
+var clean = require('gulp-clean');
+const sass = require('gulp-sass')(require('sass'));
+//const minifyHTML = require('gulp-minify-html');
+//const imagemin = require('gulp-imagemin');
+const notify = require('gulp-notify');
+var newer = require('gulp-newer');
+const tsc = require("gulp-typescript");
+const tsProject = tsc.createProject('tsconfig.json');
+
+const babel = require('gulp-babel');
+const rename = require('gulp-rename');
+var browserSync = require('browser-sync').create();
+var flatten = require('gulp-flatten');
+const path = require('path');
+
+var IsPROD = process.env.NODE_ENV === 'production';
+const sassOptions = {
+    errLogToConsole: true,
+    outputStyle: 'expanded'
+};
+
+var PATH_ENTRY = { src: "./src/scripts/main.ts" };
+var PATH_CSS = { src: "./src/css/*.*", dist: "./dist/css/" };
+var PATH_JS = { src: "./src/**/*.ts", dist: "./dist/js/" };
+var PATH_JSX = { src: "src/scripts/app/**/*.tsx", dist: "./dist/js/" };
+var PATH_HTML = { src: "./src/pages/*.html", dist: "./dist" };
+var PATH_INDEX = { src: "./src/index.html", dist: "./dist" };
+var PATH_IMG = { src: "./images/**/*.*", dist: "./dist/images" };
+var PATH_public = { src: "./public/**/*.*", dist: "./dist/public" };
+var PATH_assets = { src: "./assets/**/*.*", dist: "./dist/assets" };
+var PATH_DIST = { src: "./dist/**/*.*", dist: "./dist/**/*.*" };
+ 
+
+//.src("src/pages/*.html", { base: ".", dot: true })
+// Error Handling
+var gulp_src = gulp.src;
+gulp.src = function () {
+    return gulp_src.apply(gulp, arguments)
+        .pipe(plumber(function (error) {
+            // Output an error message
+            gutil.log(gutil.colors.red('Error (' + error.plugin + '): ' + error.message));
+            // emit the end event, to properly end the task
+            this.emit('end');
+        })
+        );
+};
+//image task
+gulp.task('copyImages', function (done) {
+    gulp.src("images/*.*").pipe(newer('./dist/images'))
+        // .pipe(newer(outputDir + 'images')) 
+        .pipe(gulp.dest('./dist/images'))
+        .pipe(plumber())
+        .pipe(notify({ message: "Images tasks have been completed!" }));
+    done()
+});
+
+// Task to compile SASS
+gulp.task("compileCass", function (done) {
+    gulp.src(PATH_CSS.src).pipe(newer('./dist/css'))
+        .pipe(sass().on("error", sass.logError))
+        .pipe(gulp.dest("dist/css"))
+    done();
+});
+
+gulp.task("copyIndex", function (done) {
+      gulp.src(PATH_INDEX.src, { base: ".", dot: true })
+         .on("change", function (file) {
+            console.log(file);
+         }).pipe(newer('./dist'))
+        .pipe(template({ scripts: ['js/main.js'] }))
+        .pipe(fileinclude({
+            prefix: '@@',
+            basepath: "@root", // Paths relative to each HTML file
+            filters: {
+                log: (text) => {
+                    console.log('🔍 Including:', text);
+                    return text;
+                }
+            }
+        }))
+        .on('error', function (err) {
+            console.error('❌ File Include Error:', err.message);
+            this.emit('end');
+        })
+        .pipe(flatten())//.pipe(rename({ dirname: '' }))
+        .pipe(gulp.dest("dist"));
+    done();
+});
+ 
+// Provide `once: true` to restrict reloading to once per stream
+gulp.task('templates', function () {
+    return gulp.src('*.jade')
+        .pipe(jade())
+        .pipe(gulp.dest('app'))
+        .pipe(bs.stream({ once: true }));
+});
+
+
+
+gulp.task("copyHtml", function (done) {
+      gulp.src(PATH_HTML.src, { base: ".", dot: true }).pipe(newer('./dist'))
+        .on("change", function (file) {
+            console.log(file);
+        })
+        .pipe(fileinclude({
+            prefix: '@@',
+            basepath: "@root", // Paths relative to each HTML file
+            filters: {
+                log: (text) => {
+                    console.log('🔍 Including:', text);
+                    return text;
+                }
+            }
+        }))
+        .on('error', function (err) {
+            console.error('❌ File Include Error:', err.message);
+            this.emit('end');
+        })
+        .pipe(flatten()) //.pipe(rename({ dirname: '' }))
+        .pipe(gulp.dest("dist"));
+    done();
+});
+
+
+ 
+// Task to clean the dist directory
+gulp.task("cleanfiles", function () {
+    return gulp.src(PATH_DIST.dist).pipe(clean());
+});
+
+// Task to transpile JavaScript files with Babel
+gulp.task("transpile-js", function () {
+    return gulp.src("src/scripts/**/*.ts").pipe(babel()).pipe(gulp.dest("./dist/js"));
+    // .pipe(browserSync.stream());
+});
+
+
+gulp.task('buildjsfiles', function () {
+
+    return gulp.src('src/**/*.js', { read: false })
+      
+        // transform file objects using gulp-tap plugin
+        .pipe(tap(function (file) {
+
+            console.log('bundling ' + file.path);
+
+            // replace file contents with browserify's bundle stream
+            file.contents = browserify(file.path, { debug: true }).exclude('lodash.js').bundle();
+
+        })).on('prebundle', function (bundle) {
+            // The following requirements are loaded from the vendor bundle
+            libs.forEach(function (lib) {
+                bundle.external(lib);
+            });
+        }) 
+        .pipe(rename({
+            dirname: "./",
+           // basename: "aloha",
+            //prefix: "bonjour-",
+           // suffix: "-hola",
+            //extname: ".md"
+        }))
+        // transform streaming contents into buffer contents (because gulp-sourcemaps does not support streaming contents)
+        .pipe(buffer())
+       
+        // load and init sourcemaps
+        //.pipe(sourcemaps.init({ loadMaps: true }))
+
+        .pipe(uglify())
+
+        // write sourcemaps
+        //.pipe(sourcemaps.write('./'))
+       
+        .pipe(gulp.dest('dist/js'));
+
+});
+// process JS files and return the stream.
+gulp.task('compileTS', function (done) {
+    const entries = ["./src/scripts/page_main.ts", "./src/scripts/page_products.ts"];
+      entries.map(entry => {
+        const relativePath = path.relative(path.join(__dirname, './'), entry);
+        const _name = relativePath.replace(".ts", ".js");
+        var _name2 = _name.replace(/^.*[\\/]/, '')
+        console.log(_name2);
+          browserify({
+              entries: [entry],
+              debug: true,
+          })
+            .plugin(tsify)
+            .on('file', function (file, id, parent) { console.log(file); })
+            .on('error', function (error) { console.error(error.toString()); })
+            .bundle()
+            .pipe(source(_name))
+            .pipe(buffer())
+            // .pipe(sourcemaps.init({ loadMaps: true }))
+            // .pipe(sourcemaps.write('.'))
+            .pipe(rename(_name2)) // Rename the file here
+            .pipe(gulp.dest("dist/js"))
+        done();
+    });
+   
+});
+
+gulp.task('compileTS2', function () {
+    return browserify.add(PATH_ENTRY.src, { debug: true }) // Add the entry file
+        .plugin(tsify)
+        //.transform("babelify")
+        .bundle()
+        .on('error', function (error) { console.error(error.toString()); })
+        .pipe(source("bundle.js"))
+        .pipe("dist/js");
+});
+ 
+// process JS files and return the stream.
+gulp.task('compileOneBundle', function () {
+
+    return browserify({
+        basedir: ".",
+       // debug: true,
+        entries: [PATH_JS.src],
+        cache: {},
+        packageCache: {},
+        }).on('file', function (file, id, parent) {
+            console.log(file);
+        }).on('error', function (error) { console.error(error.toString()); })
+        .plugin(tsify)
+        .bundle()
+        .pipe(source("js/bundle.js"))
+       
+
+});
+
+
+
+gulp.task('buildSTX2', function () {
+    return browserify({
+        basedir: '.',
+        debug: true,
+        entries: [PATH_ENTRY.src],
+        cache: {},
+        packageCache: {},
+    })
+        .plugin(tsify, { noImplicitAny: true })
+       // .transform("babelify")
+        .bundle()
+        .on('error', function (error) { console.error(error.toString()); })
+        .pipe(source('app2.js')) // Output file name
+         
+});
+
+gulp.task('buildSTX', function (done) {
+    gulp.src([PATH_JSX.src]).pipe(newer('./dist/js'))
+        .on('data', function (file) {
+           
+            const relativePath = path.relative(path.join(__dirname, './'), file.path);
+            const _name = relativePath.replace(".tsx", ".js");
+            var _name2 = _name.replace(/^.*[\\/]/, '')
+            console.log("file stx =", _name2);
+            const b = browserify({
+                entries: [file.path],
+                cache: {},
+                packageCache: {},
+                //  plugin: [watchify]
+            })
+                .plugin(tsify)
+                .on('error', function (error) {
+                    console.error(error.message);
+                    this.emit('end');
+                });
+
+            function rebundle() {
+                return b.transform("babelify").bundle()
+                    .pipe(source(relativePath))
+                    .pipe(buffer())
+                    // .pipe(sourcemaps.init({ loadMaps: true }))
+                    // .pipe(sourcemaps.write('.'))
+                    .pipe(rename(_name2)) // Rename the file here
+                    .pipe(gulp.dest("dist/js"))
+                //.pipe(browserSync.stream());
+
+            }
+
+            b.on('update', rebundle);
+            return rebundle();
+        });
+    done();
+});
+
+gulp.task('bundleScripts', function (done) {
+    let appDir = ".";
+    console.log(IsPROD);
+    gulp.src([PATH_JS.src]).pipe(newer('./dist/js'))
+        .on('data', function (file) {
+            const relativePath = path.relative(path.join(__dirname, './'), file.path);
+            const _name = relativePath.replace(".ts", ".js");
+            var _name2 = _name.replace(/^.*[\\/]/, '');
+            console.log(_name2);
+            const b = browserify({
+                entries: [file.path],
+                cache: {},
+                packageCache: {},
+                extensions: ['.js'],
+                debug: !IsPROD,
+                //  plugin: [watchify]
+            })
+                .exclude('**/node_modules/rxjs/**')
+                .transform("babelify", {
+                global: true,
+                ignore: [
+                    // /node_modules/,
+                    function (filepath) {
+                       // console.log("fff rxjs", filepath);
+                        // Ignore files in node_modules that are  rxjs
+                        var isYes = /node_modules/.test(filepath) && (!/rxjs/.test(filepath));
+                        if (isYes) {
+                            console.log("yes rxjs", filepath);
+                            return false
+                            
+                        }
+                        return true
+                    },
+                ]
+                //ignore: [/[/\\]rxjs[/\\](?!whatwg-fetch[/\\])/],
+                //ignore: [/(mylargelib\.)./]
+                //only: [/^(?:.*\/node_modules\/(?:a|b)\/|(?!.*\/node_modules\/)).*$/],
+                // presets: ["es2015"]
+            })
+                .plugin(tsify)
+                .on('error', function (error) {
+                    console.error(error.message);
+                    this.emit('end');
+                });
+
+            function rebundle() {
+                return b.transform("babelify").bundle()
+                    .pipe(source(relativePath))
+                    .pipe(buffer())
+                    .pipe(uglify())
+                    // .pipe(sourcemaps.init({ loadMaps: true }))
+                    // .pipe(sourcemaps.write('.'))
+                    .pipe(rename(_name2)) // Rename the file here
+                    .pipe(gulp.dest("dist/js"))
+                    //.pipe(browserSync.stream());
+
+            }
+
+            b.on('update', rebundle);
+            return rebundle();
+        });
+    done();
+});
+function createThemedBuilds(cb) {
+    const buildsGlob = './*/css/build/*.scss';
+    glob(buildsGlob, {}, (err, files) => {
+        files
+            .filter(file => file.match(/\/_.+\.scss$/))
+            .forEach(file => {
+                themes.forEach(theme => {
+                    const themed = file.replace(/\/_(.+)\.scss$/, `/$1.${theme}.scss`);
+                    if (!fs.existsSync(themed)) {
+                        const buildName = file.replace(/.+\/_(.+)\.scss$/, '$1');
+                        const code = `@import '../../../common/css/theme/${theme}';\n@import '${buildName}';\n`;
+                        console.log(`Create missing SCSS themed build: ${themed}`);
+                        fs.writeFileSync(themed, code);
+                    }
+                });
+            });
+        cb();
+    });
+
+}
+
+ 
+const sourcesGlob = './src/css/**/*.scss';
+const destination = () => gulp.dest('./dist/css/');
+
+gulp.task('css-prod', () => gulp
+    .src(sourcesGlob)
+    .pipe(sass({
+        ...sassOptions,
+        ...{ outputStyle: 'compressed' }
+    }).on('error', sass.logError))
+ 
+    .pipe(renameAs('min'))
+    .pipe(destination())
+);
+
+function renameAs(ext) {
+    return rename(path => {
+        path.dirname = '';
+        path.basename = `${path.basename}.${ext}`;
+        return path;
+    });
+}
+function browserSyncServe(done) {
+    browserSync.init({
+        server: {
+            baseDir: "./dist"
+        },
+        open: false,
+        browser: "Google Chrome",
+        //notify: true,
+        port: 3000,
+        notify: {
+            styles: {
+                top: 'auto',
+                bottom: '0',
+                borderRadius: '4px 0 0 0',
+                opacity: .9
+            }
+        },
+        snippetOptions: {
+            rule: {
+                match: /<\/body>/i,
+                fn: function (snippet, match) {
+                    return snippet + match;
+                }
+            }
+        }
+    });
+    done();
+}
+
+ 
+async function browserSyncReload(cb) {
+    browserSync.reload();
+    cb();
+}
+function watchTask() {
+   // gulp.watch('./images/**/*.*', gulp.series("copyImages", browserSyncReload));
+    gulp.watch('./src/index.html', gulp.series("copyIndex", browserSyncReload));
+    gulp.watch('./src/**/*.html', gulp.series("copyHtml", browserSyncReload));
+    gulp.watch("./src/**/*.ts", gulp.series('bundleScripts', browserSyncReload));
+    gulp.watch('./src/**/*.tsx', gulp.series('buildSTX'));
+    gulp.watch('./src/css/*.*css', gulp.series("compileCass", browserSyncReload));
+   
+}
+
+gulp.task('watch', gulp.series(watchTask));
+gulp.task('clean', gulp.series('cleanfiles'));
+gulp.task('default', gulp.parallel('bundleScripts','buildSTX', browserSyncServe,    'copyIndex', 'copyHtml', watchTask));

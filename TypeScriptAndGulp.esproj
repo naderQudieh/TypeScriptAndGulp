@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.2191419">
   <ItemGroup>
+    <None Remove=".vscode\**" />
+    <None Remove="tmp\**" />
+    <TypeScriptConfiguration Remove=".vscode\**" />
+    <TypeScriptConfiguration Remove="tmp\**" />
+  </ItemGroup>
+  <ItemGroup>
     <Folder Include="assets\" />
   </ItemGroup>
 </Project>

@@ -1,19 +1,11 @@
-.main-container2 {
+.main-container {
   display: block;
   min-height: 750px !important;
+  background-color: #ccc !important;
   min-height: 500px;
+  width: 100%;
 }
 
-nav ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-nav li {
-  display: inline-block;
-}
-nav a {
-  display: block;
-  padding: 6px 12px;
-  text-decoration: none;
+#mainhader {
+  background-color: #0758a9 !important;
 }
